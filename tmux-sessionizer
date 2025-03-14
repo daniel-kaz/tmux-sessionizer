@@ -3,8 +3,8 @@
 # cat .files | xargs -I % bash -c 'realpath %' | xargs -I % find % -mindepth 1 -maxdepth 1 -type d | fzf
 
 hydrate() {
-    if [ -f $2/.txs ]; then
-        tmux send-keys -t $1 "source $2/.tmux-sessioniser" c-M
+    if [ -f $2/local.txs ]; then
+        tmux send-keys -t $1 "source $2/local.txs" c-M
     elif [ -f $HOME/.tmux-sessioniser ]; then
         tmux send-keys -t $1 "source $HOME/.tmux-sessioniser" c-M
     fi
@@ -38,7 +38,7 @@ tmux_running=$(pgrep tmux)
 if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
     tmux new-session -s $selected_name -c $selected
     hydrate $selected_name $selected
-#    exit 0
+    exit 0
 fi
 
 if ! has_session $selected_name; then
