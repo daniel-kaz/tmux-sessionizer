@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 
-# cat .files | xargs -I % bash -c 'realpath %' | xargs -I % find % -mindepth 1 -maxdepth 1 -type d | fzf
+CONFIG_FILE_NAME="tmux-sessionizer.conf"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/tmux-sessionizer"
+CONFIG_FILE="$CONFIG_DIR/$CONFIG_FILE_NAME"
+
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+fi
 
 hydrate() {
     if [ -f $2/local.txs ]; then
@@ -22,14 +28,47 @@ has_session() {
     tmux list-sessions | grep -q "^$1:"
 }
 
+# if TS_SEARCH_PATHS is not set use default
+[[ -n "$TS_SEARCH_PATHS" ]] || TS_SEARCH_PATHS=(~/Documents/)
+
+# Add any extra search paths to the TS_SEARCH_PATHS array
+# e.g : EXTRA_SEARCH_PATHS=("$HOME/extra1:4" "$HOME/extra2")
+# note : Path can be suffixed with :number to limit or extend the depth of the search for the Path
+
+if [[ ${#TS_EXTRA_SEARCH_PATHS[@]} -gt 0 ]]; then
+    TS_SEARCH_PATHS+=("${TS_EXTRA_SEARCH_PATHS[@]}")
+fi
+
+find_dirs() {
+    if [[ -n "${TMUX}" ]]; then
+        current_sesh=$(tmux display-message -p '#S')
+        tmux list-sessions -F "[TMUX] #{session_name}" 2>/dev/null | grep -vFx "[TMUX] $current_sesh"
+    else
+        tmux list-sessions -F "[TMUX] #{session_name}" 2>/dev/null
+    fi
+    for entry in "${TS_SEARCH_PATHS[@]}"; do 
+        if [[ "$entry" =~ ^([^:]+):([0-9]+)$ ]]; then
+            path="${BASH_REMATCH[1]}"
+            depth="${BASH_REMATCH[2]}"
+        else 
+            path="$entry"
+        fi
+        [[ -d "$path" ]] && find "$path" -mindepth 1 -maxdepth "${depth:-1}" -path '*/.git' -prune -o -type d -print
+    done
+}
+
 if [[ $# -eq 1 ]]; then 
     selected=$1
 else
-    selected=$(cat ~/.workspace_dirs | xargs -I % bash -c 'realpath %' | xargs -I % find % -mindepth 1 -maxdepth 2 -type d | fzf) 
+    selected=$(find_dirs | fzf)
 fi
 
 if [[ -z $selected ]]; then
     exit 1
+fi
+
+if [[ "$selected" =~ ^\[TMUX\]\ (.+)$ ]]; then
+    selected="${BASH_REMATCH[1]}"
 fi
 
 selected_name=$(basename "$selected" | tr . _)
@@ -38,7 +77,6 @@ tmux_running=$(pgrep tmux)
 if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
     tmux new-session -ds $selected_name -c $selected
     hydrate $selected_name $selected
-    exit 0
 fi
 
 if ! has_session $selected_name; then
