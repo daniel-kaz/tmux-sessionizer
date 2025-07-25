@@ -3,23 +3,47 @@
 CONFIG_FILE_NAME="tmux-sessionizer.conf"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/tmux-sessionizer"
 CONFIG_FILE="$CONFIG_DIR/$CONFIG_FILE_NAME"
+TS_LOG="file"
 
 if [[ -f "$CONFIG_FILE" ]]; then
     source "$CONFIG_FILE"
 fi
 
+# logging
+if [[ $TS_LOG != "true" ]]; then
+    if [[ -z $TS_LOG_FILE ]]; then
+        TS_LOG_FILE="$HOME/.local/share/tmux-sessionizer/tmux-sessionizer.logs"
+    fi
+
+    mkdir -p "$(dirname "$TS_LOG_FILE")"
+fi
+
+log() {
+    if [[ -z $TS_LOG ]]; then
+        return
+    elif [[ $TS_LOG == "echo" ]]; then
+        echo "$*"
+    elif [[ $TS_LOG == "file" ]]; then
+        echo "$*" >> "$TS_LOG_FILE"
+    fi
+}
+
 hydrate() {
     if [ -f $2/local.txs ]; then
+        log "Sourcing local.txs for session $1"
         tmux send-keys -t $1 "source $2/local.txs" c-M
     elif [ -f $HOME/.tmux-sessioniser ]; then
         tmux send-keys -t $1 "source $HOME/.tmux-sessioniser" c-M
+        log "Sourcing $HOME/.tmux-sessioniser for session $1"
     fi
 }
 
 switch_to() {
     if [[ -z $TMUX ]]; then 
+        log "Attaching to session $1"
         tmux attach-session -t $1
     else
+        log "Attaching to session $1"
         tmux switch-client -t $1
     fi
 }
